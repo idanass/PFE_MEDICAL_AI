@@ -1,0 +1,5 @@
+venv/
+model/resnet50_best.pth
+__pycache__/
+*.pyc
+.env

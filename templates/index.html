@@ -1,0 +1,266 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PFE Medical AI - TB Detection</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        body {
+            font-family: 'Segoe UI', sans-serif;
+            background: #0f1117;
+            color: #ffffff;
+            min-height: 100vh;
+        }
+
+        header {
+            background: #1a1d27;
+            padding: 20px 40px;
+            border-bottom: 2px solid #3b82f6;
+            text-align: center;
+        }
+
+        header h1 {
+            font-size: 28px;
+            color: #3b82f6;
+        }
+
+        header p {
+            color: #9ca3af;
+            margin-top: 5px;
+        }
+
+        .container {
+            max-width: 1000px;
+            margin: 40px auto;
+            padding: 0 20px;
+        }
+
+        .upload-card {
+            background: #1a1d27;
+            border: 2px dashed #3b82f6;
+            border-radius: 16px;
+            padding: 40px;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+
+        .upload-card:hover {
+            border-color: #60a5fa;
+            background: #1e2235;
+        }
+
+        .upload-card h2 {
+            font-size: 20px;
+            margin-bottom: 10px;
+            color: #60a5fa;
+        }
+
+        .upload-card p {
+            color: #9ca3af;
+            margin-bottom: 20px;
+        }
+
+        #file-input { display: none; }
+
+        .btn {
+            background: #3b82f6;
+            color: white;
+            border: none;
+            padding: 12px 30px;
+            border-radius: 8px;
+            font-size: 16px;
+            cursor: pointer;
+            transition: background 0.3s;
+        }
+
+        .btn:hover { background: #2563eb; }
+        .btn:disabled { background: #4b5563; cursor: not-allowed; }
+
+        #preview-section {
+            display: none;
+            margin-top: 30px;
+            text-align: center;
+        }
+
+        #preview-img {
+            max-width: 300px;
+            border-radius: 12px;
+            border: 2px solid #3b82f6;
+        }
+
+        #analyze-btn {
+            display: block;
+            margin: 20px auto 0;
+        }
+
+        #result-section {
+            display: none;
+            margin-top: 30px;
+        }
+
+        .result-card {
+            background: #1a1d27;
+            border-radius: 16px;
+            padding: 30px;
+            text-align: center;
+        }
+
+        .result-label {
+            font-size: 32px;
+            font-weight: bold;
+            margin-bottom: 10px;
+        }
+
+        .label-normal { color: #22c55e; }
+        .label-tb { color: #ef4444; }
+
+        .confidence {
+            font-size: 18px;
+            color: #9ca3af;
+            margin-bottom: 30px;
+        }
+
+        .images-row {
+            display: flex;
+            justify-content: center;
+            gap: 30px;
+            flex-wrap: wrap;
+            margin-top: 20px;
+        }
+
+        .img-box {
+            text-align: center;
+        }
+
+        .img-box p {
+            color: #9ca3af;
+            margin-bottom: 10px;
+            font-size: 14px;
+        }
+
+        .img-box img {
+            width: 250px;
+            border-radius: 12px;
+            border: 2px solid #374151;
+        }
+
+        #loading {
+            display: none;
+            text-align: center;
+            margin-top: 20px;
+            color: #60a5fa;
+            font-size: 18px;
+        }
+    </style>
+</head>
+<body>
+
+<header>
+    <h1>🫁 Medical AI — TB Detection</h1>
+    <p>Analyse automatique de radiographies pulmonaires par Deep Learning</p>
+</header>
+
+<div class="container">
+
+    <!-- Upload Card -->
+    <div class="upload-card" onclick="document.getElementById('file-input').click()">
+        <h2>📤 Upload Chest X-Ray</h2>
+        <p>Cliquez pour sélectionner une image PNG ou JPG</p>
+        <input type="file" id="file-input" accept="image/*" onchange="previewImage(event)">
+        <button class="btn">Choisir une image</button>
+    </div>
+
+    <!-- Preview -->
+    <div id="preview-section">
+        <h3 style="margin-bottom: 15px; color: #9ca3af;">Image sélectionnée :</h3>
+        <img id="preview-img" src="" alt="preview">
+        <button class="btn" id="analyze-btn" onclick="analyzeImage()">
+            🔍 Analyser
+        </button>
+    </div>
+
+    <!-- Loading -->
+    <div id="loading">⏳ Analyse en cours...</div>
+
+    <!-- Result -->
+    <div id="result-section">
+        <div class="result-card">
+            <div class="result-label" id="result-label"></div>
+            <div class="confidence" id="result-confidence"></div>
+            <div class="images-row">
+                <div class="img-box">
+                    <p>Image originale</p>
+                    <img id="original-img" src="">
+                </div>
+                <div class="img-box">
+                    <p>Grad-CAM — Zones suspectes</p>
+                    <img id="heatmap-img" src="">
+                </div>
+            </div>
+        </div>
+    </div>
+
+</div>
+
+<script>
+    let selectedFile = null;
+
+    function previewImage(event) {
+        selectedFile = event.target.files[0];
+        if (!selectedFile) return;
+
+        const reader = new FileReader();
+        reader.onload = (e) => {
+            document.getElementById('preview-img').src = e.target.result;
+            document.getElementById('original-img').src = e.target.result;
+            document.getElementById('preview-section').style.display = 'block';
+            document.getElementById('result-section').style.display = 'none';
+        };
+        reader.readAsDataURL(selectedFile);
+    }
+
+    async function analyzeImage() {
+        if (!selectedFile) return;
+
+        document.getElementById('loading').style.display = 'block';
+        document.getElementById('result-section').style.display = 'none';
+        document.getElementById('analyze-btn').disabled = true;
+
+        const formData = new FormData();
+        formData.append('file', selectedFile);
+
+        try {
+            const response = await fetch('/predict', {
+                method: 'POST',
+                body: formData
+            });
+
+            const result = await response.json();
+
+            // Afficher résultat
+            const labelEl = document.getElementById('result-label');
+            labelEl.textContent = result.label === 'Tuberculosis' ? '🔴 Tuberculosis Detected' : '🟢 Normal';
+            labelEl.className = 'result-label ' + (result.label === 'Tuberculosis' ? 'label-tb' : 'label-normal');
+
+            document.getElementById('result-confidence').textContent =
+                `Confiance : ${result.confidence}%`;
+
+            document.getElementById('heatmap-img').src =
+                'data:image/png;base64,' + result.heatmap;
+
+            document.getElementById('result-section').style.display = 'block';
+
+        } catch (error) {
+            alert('Erreur lors de lanalyse !');
+        } finally {
+            document.getElementById('loading').style.display = 'none';
+            document.getElementById('analyze-btn').disabled = false;
+        }
+    }
+</script>
+
+</body>
+</html>
