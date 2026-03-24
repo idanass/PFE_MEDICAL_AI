@@ -1,0 +1,2 @@
+cd /c/Users/HP/Desktop/PFE_Medical_AI
+venv/Scripts/python.exe -m uvicorn main:app --reload --port 8000
